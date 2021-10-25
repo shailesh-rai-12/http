@@ -1,53 +1,73 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { map } from 'rxjs/operators'
 import { Post } from './post.model';
+import { PostsService } from './posts.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit,OnDestroy {
   loadedPosts = [];
+  isFectching = false;
+  error=null;
+  private errorSub:Subscription;
 
-  constructor(private http: HttpClient) {}
-
-  ngOnInit() {
-    this.onFetchPosts();
+  constructor(private postService:PostsService) {}
+  
+  ngOnDestroy(): void {
+    this.errorSub.unsubscribe();
   }
 
-  onCreatePost(postData: { title: string; content: string }) {
+  ngOnInit() {
+   this.errorSub=this.postService.error.subscribe(errorMessage=>{
+      this.error=errorMessage;
+    });
+
+    this.postService.fetchPosts().subscribe(posts=>{
+      this.isFectching=false;
+      this.loadedPosts=posts;
+     },error=>{
+        this.error=error.message;
+     });
+  }
+
+  onCreatePost(postData:Post) {
     // Send Http request
     // console.log(postData);
-    this.http.post(
-      'https://angular-two-55096-default-rtdb.asia-southeast1.firebasedatabase.app/posts.json',
-      postData
-      ).subscribe((responseData)=>{
-        console.log(responseData);
-      })
+    this.postService.createAndStorePost(postData.title,postData.content);
+   
   }
 
   onFetchPosts() {
     // Send Http request
-    this.http.get<{[key:string]:Post}>('https://angular-two-55096-default-rtdb.asia-southeast1.firebasedatabase.app/posts.json')
-    .pipe(map(responseData=>{
-          const postArr:Post[] = [];
-          for(const key in responseData){
-                if(responseData.hasOwnProperty(key)){
-                  postArr.push({...responseData[key],id:key});
-                }  
-          }
-          return postArr;
-      })
-    )
-    .subscribe((posts=>{
-      this.loadedPosts=posts;
-      
-    }))
+    this.isFectching=true;
+    this.postService.fetchPosts()
+        .subscribe(posts=>{
+          this.isFectching=false;
+          this.loadedPosts=posts;
+         },error=>{
+          this.isFectching=false;
+            this.error=error.message;
+         });
+
+    
   }
 
   onClearPosts() {
     // Send Http request
+    this.postService.deletePosts()
+    .subscribe(data=>{
+      this.loadedPosts=[];
+    })
+    
+
+  }
+
+  onHandleError(){
+    this.error=null;
   }
 }
